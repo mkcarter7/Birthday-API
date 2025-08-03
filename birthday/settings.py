@@ -29,7 +29,10 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'birthdayapi',
 ]
-
+CORS_ORIGIN_WHITELIST = (
+    'http://localhost:3000',
+    'http://localhost:8000'
+)
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
