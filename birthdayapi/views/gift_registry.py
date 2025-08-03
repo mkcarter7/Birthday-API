@@ -241,4 +241,4 @@ class GiftRegistryItemViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def registry_stats(self, request):
-        party_id = request.query_params.get('
+        party_id = request.query_params.get

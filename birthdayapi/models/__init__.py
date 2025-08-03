@@ -1,5 +1,5 @@
 from .party import Party
-from .party_photo import PartyPhoto, PhotoLike
+from .photo import PartyPhoto, PhotoLike
 from .rsvp import RSVP
 from .guest_book import GuestBookEntry
 from .gift_registry import GiftRegistryItem
