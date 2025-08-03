@@ -1,5 +1,5 @@
 """
-ASGI config for tunapiano project.
+ASGI config for birthday project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 
