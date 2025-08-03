@@ -7,6 +7,8 @@ from django.utils import timezone
 from ..models import Party, WeatherData, PartyTimelineEvent
 from rest_framework import serializers
 
+from birthdayapi import models
+
 class WeatherDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = WeatherData
