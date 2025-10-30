@@ -1,0 +1,23 @@
+[
+  {
+    "model": "birthdayapi.party",
+    "pk": 1,
+    "fields": {
+      "name": "Ivy's 2nd Birthday",
+      "description": "Join us for an unforgettable celebration!",
+      "date": "2025-08-15T19:00:00Z",
+      "end_time": "2025-08-15T23:00:00Z",
+      "location": "274 Minkslide Rd, Bell Buckle, TN 37020",
+      "host": 1,
+      "facebook_live_url": "https://fb.me/1QpPJy5bhsaiawb",
+      "venmo_username": "isabellaCarter_18",
+      "latitude": "35.50000000000001",
+      "longitude": "-86.39999999999999",
+      "is_active": true,
+      "is_public": true,
+      "max_guests": null,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  }
+]

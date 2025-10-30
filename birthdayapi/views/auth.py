@@ -52,3 +52,26 @@ def register_user(request):
         'email': user.email
     }
     return Response(data)
+# In your Django app (e.g., birthday/authentication.py)
+from rest_framework.authentication import BaseAuthentication
+from rest_framework.exceptions import AuthenticationFailed
+import firebase_admin
+from firebase_admin import auth, credentials
+import os
+
+class FirebaseAuthentication(BaseAuthentication):
+    def authenticate(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return None
+
+        try:
+            id_token = auth_header.split(' ')[1]
+            decoded_token = auth.verify_id_token(id_token)
+            uid = decoded_token['uid']
+            
+            # You can create or get a user based on the Firebase UID
+            # For now, we'll just return a tuple indicating successful authentication
+            return (None, decoded_token)  # (user, auth)
+        except Exception as e:
+            raise AuthenticationFailed(f'Invalid Firebase ID token: {str(e)}')

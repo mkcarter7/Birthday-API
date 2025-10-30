@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
 from ..models import PartyPhoto, PhotoLike, Party
@@ -47,7 +47,17 @@ class PhotoLikeSerializer(serializers.ModelSerializer):
 
 class PartyPhotoViewSet(viewsets.ModelViewSet):
     serializer_class = PartyPhotoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]  # Default to authenticated
+    
+    def get_permissions(self):
+        """
+        Instantiates and returns the list of permissions that this view requires.
+        """
+        # Allow anyone to view, but require auth for upload/like actions
+        if self.action in ['list', 'retrieve', 'party_gallery']:
+            return [AllowAny()]
+        else:
+            return [IsAuthenticated()]
     
     def get_queryset(self):
         queryset = PartyPhoto.objects.all()
@@ -57,9 +67,9 @@ class PartyPhotoViewSet(viewsets.ModelViewSet):
         if party_id:
             queryset = queryset.filter(party_id=party_id)
         
-        # Filter by user's photos
+        # Filter by user's photos (only if authenticated)
         my_photos = self.request.query_params.get('my_photos')
-        if my_photos and my_photos.lower() == 'true':
+        if my_photos and my_photos.lower() == 'true' and self.request.user.is_authenticated:
             queryset = queryset.filter(uploaded_by=self.request.user)
         
         # Filter by featured photos
@@ -70,7 +80,11 @@ class PartyPhotoViewSet(viewsets.ModelViewSet):
         return queryset.select_related('uploaded_by', 'party').prefetch_related('likes')
     
     def perform_create(self, serializer):
+        # User is already authenticated due to permission classes
         party_id = self.request.data.get('party')
+        if not party_id:
+            raise serializers.ValidationError("Party ID is required")
+        
         party = get_object_or_404(Party, id=party_id)
         serializer.save(uploaded_by=self.request.user, party=party)
     

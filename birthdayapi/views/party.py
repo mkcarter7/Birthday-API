@@ -1,117 +1,80 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
-from ..models import Party, WeatherData, PartyTimelineEvent
+from ..models import Party
 from rest_framework import serializers
 
-from birthdayapi import models
-
-class WeatherDataSerializer(serializers.ModelSerializer):
+class UserSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    
     class Meta:
-        model = WeatherData
-        fields = ['temperature', 'condition', 'icon', 'humidity', 'wind_speed', 'updated_at']
-
-class PartyTimelineEventSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PartyTimelineEvent
-        fields = ['id', 'time', 'activity', 'description', 'icon', 'duration_minutes']
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'full_name']
+    
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip() or obj.username
 
 class PartySerializer(serializers.ModelSerializer):
-    host = serializers.StringRelatedField(read_only=True)
-    weather = WeatherDataSerializer(read_only=True)
-    timeline_events = PartyTimelineEventSerializer(many=True, read_only=True)
-    stats = serializers.SerializerMethodField()
-    is_host = serializers.SerializerMethodField()
+    host = UserSerializer(read_only=True)
+    total_rsvps = serializers.ReadOnlyField()
+    attending_count = serializers.ReadOnlyField()
+    is_past = serializers.ReadOnlyField()
     
     class Meta:
         model = Party
         fields = [
-            'id', 'name', 'description', 'date', 'end_time', 'location', 'theme',
-            'host', 'facebook_live_url', 'venmo_username', 'latitude', 'longitude',
-            'is_active', 'is_public', 'max_guests', 'created_at', 'updated_at',
-            'weather', 'timeline_events', 'stats', 'is_host'
+            'id', 'name', 'description', 'date', 'end_time', 'location',
+            'host', 'facebook_live_url', 'venmo_username', 'latitude',
+            'longitude', 'is_active', 'is_public', 'max_guests',
+            'created_at', 'updated_at', 'total_rsvps', 'attending_count', 'is_past'
         ]
         read_only_fields = ['id', 'host', 'created_at', 'updated_at']
-    
-    def get_stats(self, obj):
-        return {
-            'total_rsvps': obj.total_rsvps,
-            'attending_count': obj.attending_count,
-            'photo_count': obj.photos.count(),
-            'gift_registry_count': obj.gift_registry.count(),
-            'gifts_purchased': obj.gift_registry.filter(is_purchased=True).count(),
-        }
-    
-    def get_is_host(self, obj):
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            return obj.host == request.user
-        return False
 
 class PartyViewSet(viewsets.ModelViewSet):
-    queryset = Party.objects.all()
     serializer_class = PartySerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]  # Default to public access
+    
+    def get_permissions(self):
+        """
+        Instantiates and returns the list of permissions that this view requires.
+        """
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            permission_classes = [IsAuthenticated]
+        else:
+            permission_classes = [AllowAny]
+        return [permission() for permission in permission_classes]
     
     def get_queryset(self):
         queryset = Party.objects.all()
         
-        # Filter by public parties or user's own parties
-        if not self.request.user.is_staff:
-            queryset = queryset.filter(
-                models.Q(is_public=True) | 
-                models.Q(host=self.request.user) |
-                models.Q(rsvps__user=self.request.user)
-            ).distinct()
+        # Filter by active parties
+        active = self.request.query_params.get('active')
+        if active and active.lower() == 'true':
+            queryset = queryset.filter(is_active=True)
         
-        # Filter parameters
-        theme = self.request.query_params.get('theme')
-        is_past = self.request.query_params.get('is_past')
+        # Filter by public parties
+        public = self.request.query_params.get('public')
+        if public and public.lower() == 'true':
+            queryset = queryset.filter(is_public=True)
         
-        if theme:
-            queryset = queryset.filter(theme=theme)
-        
-        if is_past is not None:
-            if is_past.lower() == 'true':
-                queryset = queryset.filter(date__lt=timezone.now())
-            else:
-                queryset = queryset.filter(date__gte=timezone.now())
-        
-        return queryset
+        return queryset.select_related('host')
     
     def perform_create(self, serializer):
         serializer.save(host=self.request.user)
     
-    @action(detail=True, methods=['post'])
-    def add_timeline_event(self, request, pk=None):
+    @action(detail=True, methods=['get'])
+    def rsvps(self, request, pk=None):
         party = self.get_object()
-        
-        # Check if user is the host
-        if party.host != request.user:
-            return Response(
-                {'error': 'Only the host can add timeline events'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        serializer = PartyTimelineEventSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(party=party)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        rsvps = party.rsvps.all()
+        # You can add RSVP serialization here if needed
+        return Response({'rsvps': []})  # Placeholder
     
     @action(detail=True, methods=['get'])
-    def weather(self, request, pk=None):
+    def photos(self, request, pk=None):
         party = self.get_object()
-        weather_data = getattr(party, 'weather', None)
-        
-        if weather_data:
-            serializer = WeatherDataSerializer(weather_data)
-            return Response(serializer.data)
-        
-        return Response(
-            {'message': 'No weather data available'},
-            status=status.HTTP_404_NOT_FOUND
-        )
+        photos = party.photos.all()
+        # You can add photo serialization here if needed
+        return Response({'photos': []})  # Placeholder
