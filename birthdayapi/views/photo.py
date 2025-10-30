@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
 from ..models import PartyPhoto, PhotoLike, Party
@@ -53,9 +53,13 @@ class PartyPhotoViewSet(viewsets.ModelViewSet):
         """
         Instantiates and returns the list of permissions that this view requires.
         """
-        # Allow anyone to view, but require auth for upload/like actions
+        # Anyone can view photos
         if self.action in ['list', 'retrieve', 'party_gallery']:
             return [AllowAny()]
+        # Only admins can delete photos
+        elif self.action in ['destroy']:
+            return [IsAdminUser()]
+        # Authenticated users can upload and like
         else:
             return [IsAuthenticated()]
     
