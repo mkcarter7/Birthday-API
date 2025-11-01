@@ -5,7 +5,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env file
 try:
-    from dotenv import load_dotenv
+    from dotenv import load_dotenv  # type: ignore
     env_path = BASE_DIR / '.env'
     result = load_dotenv(env_path)  # Explicitly point to .env file
     if result:
@@ -151,6 +151,19 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# Explicitly allow Authorization header
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # Media files settings
 MEDIA_URL = '/media/'

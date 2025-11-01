@@ -2,12 +2,29 @@
 Trivia Game ViewSet
 Provides trivia questions and validates answers for the Party Trivia game
 """
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+from birthday.authentication import FirebaseAuthentication
 from ..models import GameScore, Party
+
+
+class TriviaPermission(permissions.BasePermission):
+    """
+    Custom permission for trivia game:
+    - Anyone can view questions (GET)
+    - Only authenticated users can submit answers (POST)
+    """
+    def has_permission(self, request, view):
+        # Read permissions are allowed to any request
+        if request.method in ['GET', 'HEAD', 'OPTIONS']:
+            return True
+        # Write permissions require authentication
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return True
 
 
 # Base trivia question templates - will be personalized per party
@@ -124,7 +141,8 @@ class TriviaViewSet(viewsets.ViewSet):
     ViewSet for Trivia Game
     Provides endpoints for getting trivia questions and submitting answers
     """
-    permission_classes = [IsAuthenticated]
+    authentication_classes = [FirebaseAuthentication]
+    permission_classes = [TriviaPermission]
     
     @action(detail=False, methods=['get'])
     def questions(self, request):
@@ -192,6 +210,13 @@ class TriviaViewSet(viewsets.ViewSet):
             ]
         }
         """
+        # Additional check - permission class should handle this, but just in case
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required. Please log in to submit answers.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
         party_id = request.data.get('party')
         answers = request.data.get('answers', [])
         

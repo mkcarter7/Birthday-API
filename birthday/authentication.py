@@ -114,17 +114,46 @@ def initialize_firebase():
     Fallback to GOOGLE_APPLICATION_CREDENTIALS or default credentials.
     """
     if firebase_admin._apps:
-        logger.info("Firebase already initialized")
-        return
+        # Check if the existing app has a project ID
+        try:
+            app = firebase_admin.get_app()
+            # Try to verify the app has project ID by checking options
+            if hasattr(app.project_id, '__call__'):
+                project_id = app.project_id()
+            else:
+                project_id = getattr(app, 'project_id', None)
+            
+            if not project_id:
+                logger.warning("Firebase initialized without project ID, attempting to re-initialize...")
+                # Delete the existing app and re-initialize
+                firebase_admin.delete_app(app)
+            else:
+                logger.info(f"Firebase already initialized with project: {project_id}")
+                return
+        except Exception as e:
+            logger.warning(f"Error checking existing Firebase app: {e}, attempting re-initialization...")
+            try:
+                app = firebase_admin.get_app()
+                firebase_admin.delete_app(app)
+            except:
+                pass
 
     logger.info("Initializing Firebase...")
     try:
+        # Get project ID from env var or service account
+        project_id = os.getenv('FIREBASE_PROJECT_ID') or os.getenv('GOOGLE_CLOUD_PROJECT')
+        
         # 1) Try service account from env (JSON or fields)
         svc_dict = _build_service_account_from_env()
         if svc_dict:
             cred = credentials.Certificate(svc_dict)
-            firebase_admin.initialize_app(cred)
-            logger.info("Firebase initialized successfully from environment variables")
+            # Use project_id from service account or env - MUST have project_id
+            app_project_id = svc_dict.get('project_id') or project_id
+            if not app_project_id:
+                logger.error("Firebase project ID is required but not found in service account or environment")
+                raise ValueError("FIREBASE_PROJECT_ID must be set in environment or service account")
+            firebase_admin.initialize_app(cred, {'projectId': app_project_id})
+            logger.info(f"Firebase initialized successfully from environment variables (project: {app_project_id})")
             return
 
         # 2) Try GOOGLE_APPLICATION_CREDENTIALS path
@@ -132,27 +161,54 @@ def initialize_firebase():
         if gac_path and os.path.exists(gac_path):
             logger.info(f"Using GOOGLE_APPLICATION_CREDENTIALS: {gac_path}")
             cred = credentials.Certificate(gac_path)
-            firebase_admin.initialize_app(cred)
-            logger.info("Firebase initialized successfully from GOOGLE_APPLICATION_CREDENTIALS")
+            # Try to read project_id from the credentials file
+            try:
+                import json
+                with open(gac_path, 'r') as f:
+                    cred_data = json.load(f)
+                    file_project_id = cred_data.get('project_id')
+            except:
+                file_project_id = None
+            
+            final_project_id = file_project_id or project_id
+            if not final_project_id:
+                logger.error("Firebase project ID is required but not found in credentials file or environment")
+                raise ValueError("FIREBASE_PROJECT_ID must be set in environment or credentials file")
+            firebase_admin.initialize_app(cred, {'projectId': final_project_id})
+            logger.info(f"Firebase initialized successfully from GOOGLE_APPLICATION_CREDENTIALS (project: {final_project_id})")
             return
 
         # 3) Try local file if present (optional for dev)
         if os.path.exists('firebase-service-account.json'):
             logger.info("Using local firebase-service-account.json file")
             cred = credentials.Certificate('firebase-service-account.json')
-            firebase_admin.initialize_app(cred)
-            logger.info("Firebase initialized successfully from local file")
+            if project_id:
+                firebase_admin.initialize_app(cred, {'projectId': project_id})
+            else:
+                firebase_admin.initialize_app(cred)
+            logger.info(f"Firebase initialized successfully from local file (project: {project_id or 'default'})")
             return
 
-        # 4) Fallback: default credentials (works on GCP or configured envs)
-        logger.warning("No Firebase credentials found, attempting default initialization")
-        firebase_admin.initialize_app()
-        logger.info("Firebase initialized with default credentials")
+        # 4) Fallback: default credentials with project ID if available
+        if project_id:
+            logger.warning(f"Using default credentials with project ID: {project_id}")
+            firebase_admin.initialize_app({'projectId': project_id})
+            logger.info(f"Firebase initialized with default credentials (project: {project_id})")
+        else:
+            logger.warning("No Firebase credentials found, attempting default initialization")
+            firebase_admin.initialize_app()
+            logger.info("Firebase initialized with default credentials")
     except Exception as e:
         logger.warning(f"Firebase init attempt failed: {e}")
         try:
-            logger.warning("Trying default Firebase initialization as fallback...")
-            firebase_admin.initialize_app()
-            logger.info("Firebase initialized with default credentials (fallback)")
+            project_id = os.getenv('FIREBASE_PROJECT_ID') or os.getenv('GOOGLE_CLOUD_PROJECT')
+            if project_id:
+                logger.warning(f"Trying default Firebase initialization with project ID: {project_id}")
+                firebase_admin.initialize_app({'projectId': project_id})
+                logger.info(f"Firebase initialized with default credentials (project: {project_id})")
+            else:
+                logger.warning("Trying default Firebase initialization as fallback...")
+                firebase_admin.initialize_app()
+                logger.info("Firebase initialized with default credentials (fallback)")
         except Exception as inner:
             logger.error(f"Firebase initialization completely failed: {inner}")
