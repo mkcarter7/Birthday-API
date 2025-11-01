@@ -15,6 +15,7 @@ from birthdayapi.views.gift_registry import GiftRegistryItemViewSet
 from birthdayapi.views.guest_book import GuestBookEntryViewSet
 from birthdayapi.views.game_score import GameScoreViewSet
 from birthdayapi.views.badges import BadgeViewSet
+from birthdayapi.views.trivia import TriviaViewSet
 from birthdayapi.views.admin import check_admin_status
 
 router = DefaultRouter()
@@ -25,6 +26,7 @@ router.register(r'api/gifts', GiftRegistryItemViewSet, basename='giftregistryite
 router.register(r'api/guestbook', GuestBookEntryViewSet, basename='guestbookentry')
 router.register(r'api/scores', GameScoreViewSet, basename='gamescore')
 router.register(r'api/badges', BadgeViewSet, basename='badge')
+router.register(r'api/trivia', TriviaViewSet, basename='trivia')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
