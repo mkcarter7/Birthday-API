@@ -1,13 +1,21 @@
 from pathlib import Path
-try:
-    from dotenv import load_dotenv  # type: ignore
-    load_dotenv()
-except Exception:
-    # python-dotenv not installed; env vars can still be provided by OS/host
-    pass
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    env_path = BASE_DIR / '.env'
+    result = load_dotenv(env_path)  # Explicitly point to .env file
+    if result:
+        print(f"[SETTINGS] Successfully loaded .env from {env_path}")
+    else:
+        print(f"[SETTINGS] .env file not found at {env_path}")
+except Exception as e:
+    # python-dotenv not installed; env vars can still be provided by OS/host
+    print(f"[SETTINGS] Error loading .env: {e}")
+    pass
 
 
 # Quick-start development settings - unsuitable for production

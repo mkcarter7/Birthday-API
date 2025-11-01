@@ -41,9 +41,10 @@ class RSVPAdmin(admin.ModelAdmin):
 # Register GuestBookEntry model
 @admin.register(GuestBookEntry)
 class GuestBookEntryAdmin(admin.ModelAdmin):
-    list_display = ['party', 'author', 'is_featured', 'created_at']
-    list_filter = ['is_featured', 'created_at']
-    search_fields = ['message', 'author__username']
+    list_display = ['party', 'author', 'created_at', 'updated_at']
+    list_filter = ['created_at', 'party']
+    search_fields = ['message', 'author__username', 'party__name']
+    readonly_fields = ['created_at', 'updated_at']
 
 # Register GiftRegistryItem model
 @admin.register(GiftRegistryItem)

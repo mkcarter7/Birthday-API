@@ -36,7 +36,8 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
             
         except Exception as e:
             logger.error(f"Firebase authentication error: {str(e)}")
-            raise exceptions.AuthenticationFailed('Invalid Firebase token')
+            # Return None instead of raising - let permissions decide
+            return None
 
     def get_or_create_user(self, uid, decoded_token):
         """
@@ -74,6 +75,7 @@ def _build_service_account_from_env():
     svc_json = os.getenv('FIREBASE_SERVICE_ACCOUNT_JSON')
     if svc_json:
         try:
+            logger.info("Using FIREBASE_SERVICE_ACCOUNT_JSON")
             return json.loads(svc_json)
         except json.JSONDecodeError:
             logger.error('FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON')
@@ -82,9 +84,14 @@ def _build_service_account_from_env():
     project_id = os.getenv('FIREBASE_PROJECT_ID')
     client_email = os.getenv('FIREBASE_CLIENT_EMAIL')
     private_key = os.getenv('FIREBASE_PRIVATE_KEY')
+    
+    logger.info(f"_build_service_account_from_env called")
+    logger.info(f"Firebase env check: project_id={bool(project_id)}, client_email={bool(client_email)}, private_key={bool(private_key)}")
+    
     if project_id and client_email and private_key:
         # Handle escaped newlines in env vars
         private_key = private_key.replace('\\n', '\n')
+        logger.info("Building Firebase service account from individual env vars")
         return {
             'type': 'service_account',
             'project_id': project_id,
@@ -97,6 +104,7 @@ def _build_service_account_from_env():
             'auth_provider_x509_cert_url': 'https://www.googleapis.com/oauth2/v1/certs',
             'client_x509_cert_url': os.getenv('FIREBASE_CLIENT_X509_CERT_URL', ''),
         }
+    logger.warning("No Firebase credentials found in environment")
     return None
 
 
@@ -106,34 +114,45 @@ def initialize_firebase():
     Fallback to GOOGLE_APPLICATION_CREDENTIALS or default credentials.
     """
     if firebase_admin._apps:
+        logger.info("Firebase already initialized")
         return
 
+    logger.info("Initializing Firebase...")
     try:
         # 1) Try service account from env (JSON or fields)
         svc_dict = _build_service_account_from_env()
         if svc_dict:
             cred = credentials.Certificate(svc_dict)
             firebase_admin.initialize_app(cred)
+            logger.info("Firebase initialized successfully from environment variables")
             return
 
         # 2) Try GOOGLE_APPLICATION_CREDENTIALS path
         gac_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
         if gac_path and os.path.exists(gac_path):
+            logger.info(f"Using GOOGLE_APPLICATION_CREDENTIALS: {gac_path}")
             cred = credentials.Certificate(gac_path)
             firebase_admin.initialize_app(cred)
+            logger.info("Firebase initialized successfully from GOOGLE_APPLICATION_CREDENTIALS")
             return
 
         # 3) Try local file if present (optional for dev)
         if os.path.exists('firebase-service-account.json'):
+            logger.info("Using local firebase-service-account.json file")
             cred = credentials.Certificate('firebase-service-account.json')
             firebase_admin.initialize_app(cred)
+            logger.info("Firebase initialized successfully from local file")
             return
 
         # 4) Fallback: default credentials (works on GCP or configured envs)
+        logger.warning("No Firebase credentials found, attempting default initialization")
         firebase_admin.initialize_app()
+        logger.info("Firebase initialized with default credentials")
     except Exception as e:
-        logger.warning(f"Firebase init fallback: {e}. Using default initialization.")
+        logger.warning(f"Firebase init attempt failed: {e}")
         try:
+            logger.warning("Trying default Firebase initialization as fallback...")
             firebase_admin.initialize_app()
+            logger.info("Firebase initialized with default credentials (fallback)")
         except Exception as inner:
-            logger.error(f"Firebase initialization failed: {inner}")
+            logger.error(f"Firebase initialization completely failed: {inner}")
