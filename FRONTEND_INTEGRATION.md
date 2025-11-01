@@ -257,6 +257,149 @@ export default function PhotoUpload({ partyId }) {
 }
 ```
 
+#### Guest Book Component
+```jsx
+// components/GuestBook.jsx
+import { useState, useEffect } from 'react';
+import { apiRequest, getAuthToken } from '../lib/api';
+import { auth } from '../lib/firebase';
+
+export default function GuestBook({ partyId }) {
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const user = auth.currentUser;
+
+  useEffect(() => {
+    loadMessages();
+  }, [partyId]);
+
+  async function loadMessages() {
+    try {
+      const data = await apiRequest(`/api/guestbook/?party=${partyId}`);
+      setMessages(data);
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+    }
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const token = await getAuthToken();
+    
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/guestbook/`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        party: partyId,
+        message: newMessage
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      setMessages([data, ...messages]);
+      setNewMessage('');
+    }
+  }
+
+  async function handleEdit(messageId, updatedMessage) {
+    try {
+      const data = await apiRequest(`/api/guestbook/${messageId}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({ message: updatedMessage })
+      });
+      setMessages(messages.map(msg => msg.id === messageId ? data : msg));
+      setEditingId(null);
+    } catch (error) {
+      alert('Failed to update message');
+    }
+  }
+
+  async function handleDelete(messageId) {
+    if (!confirm('Are you sure you want to delete this message?')) return;
+    
+    try {
+      await apiRequest(`/api/guestbook/${messageId}/`, {
+        method: 'DELETE'
+      });
+      setMessages(messages.filter(msg => msg.id !== messageId));
+    } catch (error) {
+      alert('Failed to delete message');
+    }
+  }
+
+  return (
+    <div className="guestbook">
+      <h2>Guest Book</h2>
+      
+      {/* Add message form */}
+      {user && (
+        <form onSubmit={handleSubmit}>
+          <textarea
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            placeholder="Leave a message..."
+            required
+          />
+          <button type="submit">Post Message</button>
+        </form>
+      )}
+      
+      {/* Messages list */}
+      <div className="messages">
+        {messages.map(msg => (
+          <div key={msg.id} className="message">
+            <div className="message-header">
+              <span className="author">
+                {msg.name || `${msg.author_first_name} ${msg.author_last_name}`}
+              </span>
+              <span className="time">
+                {new Date(msg.created_at).toLocaleDateString()}
+              </span>
+            </div>
+            
+            {editingId === msg.id ? (
+              <div className="edit-form">
+                <textarea
+                  defaultValue={msg.message}
+                  ref={ref => {
+                    if (ref) {
+                      const updated = ref.value;
+                      ref.addEventListener('blur', () => {
+                        if (updated !== msg.message) {
+                          handleEdit(msg.id, updated);
+                        } else {
+                          setEditingId(null);
+                        }
+                      });
+                    }
+                  }}
+                />
+                <button onClick={() => setEditingId(null)}>Cancel</button>
+              </div>
+            ) : (
+              <div className="message-content">{msg.message}</div>
+            )}
+            
+            {/* Edit/Delete buttons (only for own messages) */}
+            {user && msg.can_edit && (
+              <div className="message-actions">
+                <button onClick={() => setEditingId(msg.id)}>✏️ Edit</button>
+                <button onClick={() => handleDelete(msg.id)}>🗑️ Delete</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
 ## Testing Checklist
 
 - [ ] User can log in with Firebase
@@ -267,6 +410,12 @@ export default function PhotoUpload({ partyId }) {
 - [ ] Like count updates correctly
 - [ ] User can unlike photos
 - [ ] Photos require authentication
+- [ ] Guest book messages load without authentication
+- [ ] Users can add messages when authenticated
+- [ ] Users see edit/delete buttons only on their own messages
+- [ ] Users can edit their own messages
+- [ ] Users can delete their own messages
+- [ ] Edit/delete buttons are hidden for other users' messages
 
 ## Common Issues
 

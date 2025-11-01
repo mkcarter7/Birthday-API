@@ -196,11 +196,17 @@ function GuestBook({ partyId }) {
     if (response.ok) {
       const data = await response.json();
       setMessages(messages.map(msg => msg.id === messageId ? data : msg));
+      return data;
     }
+    throw new Error('Failed to update message');
   };
 
   // Delete message
   const handleDelete = async (messageId) => {
+    if (!confirm('Are you sure you want to delete this message?')) {
+      return;
+    }
+    
     const response = await fetch(`http://localhost:8000/api/guestbook/${messageId}/`, {
       method: 'DELETE',
       headers: {
@@ -210,6 +216,8 @@ function GuestBook({ partyId }) {
     
     if (response.ok) {
       setMessages(messages.filter(msg => msg.id !== messageId));
+    } else {
+      alert('Failed to delete message');
     }
   };
 
@@ -233,7 +241,7 @@ function GuestBook({ partyId }) {
       {messages.map(msg => (
         <div key={msg.id} className="message">
           <div className="author">
-            {msg.author_first_name} {msg.author_last_name}
+            {msg.name || `${msg.author_first_name} ${msg.author_last_name}`}
             <span className="time">{new Date(msg.created_at).toLocaleDateString()}</span>
           </div>
           <div className="content">{msg.message}</div>
@@ -241,11 +249,16 @@ function GuestBook({ partyId }) {
           {/* Edit/Delete buttons (only for own messages) */}
           {user && msg.can_edit && (
             <div className="actions">
-              <button onClick={() => handleEdit(msg.id, prompt('Edit message:', msg.message))}>
-                Edit
+              <button onClick={() => {
+                const newMessage = prompt('Edit message:', msg.message);
+                if (newMessage && newMessage !== msg.message) {
+                  handleEdit(msg.id, newMessage);
+                }
+              }}>
+                ✏️ Edit
               </button>
               <button onClick={() => handleDelete(msg.id)}>
-                Delete
+                🗑️ Delete
               </button>
             </div>
           )}

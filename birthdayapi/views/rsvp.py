@@ -1,12 +1,11 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
 from django.db import models
 from ..models import RSVP, Party
-from rest_framework import serializers
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
@@ -57,6 +56,11 @@ class RSVPViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         queryset = RSVP.objects.all()
+        
+        # SECURITY: Only admins can see all RSVPs
+        # Regular users only see their own RSVPs
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(user=self.request.user)
         
         # Filter by party if specified
         party_id = self.request.query_params.get('party')
@@ -159,8 +163,9 @@ class RSVPViewSet(viewsets.ModelViewSet):
         
         party = get_object_or_404(Party, id=party_id)
         
-        # Check if user can view this party's RSVPs
-        if not party.is_public and party.host != request.user:
+        # SECURITY: Only admins, party hosts, or participants can view party summaries
+        if not request.user.is_staff and party.host != request.user:
+            # Check if user has an RSVP for this party
             user_rsvp = RSVP.objects.filter(party=party, user=request.user).exists()
             if not user_rsvp:
                 return Response(

@@ -15,6 +15,7 @@ from birthdayapi.views.gift_registry import GiftRegistryItemViewSet
 from birthdayapi.views.guest_book import GuestBookEntryViewSet
 from birthdayapi.views.game_score import GameScoreViewSet
 from birthdayapi.views.badges import BadgeViewSet
+from birthdayapi.views.admin import check_admin_status
 
 router = DefaultRouter()
 router.register(r'api/parties', PartyViewSet, basename='party')
@@ -30,6 +31,7 @@ urlpatterns = [
     
     path('api/auth/', include('rest_framework.urls')),
     path('api/token/', obtain_auth_token, name='api_token_auth'),
+    path('api/check-admin/', check_admin_status, name='check_admin_status'),
     
     path('', include(router.urls)),
 ]
