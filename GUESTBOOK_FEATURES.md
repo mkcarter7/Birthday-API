@@ -43,6 +43,7 @@ Each message shows:
   "author_username": "john_doe",
   "author_first_name": "John",
   "author_last_name": "Doe",
+  "name": "John Doe",
   "message": "Happy birthday!",
   "created_at": "2025-01-15T12:00:00Z",
   "updated_at": "2025-01-15T12:00:00Z",
@@ -63,6 +64,7 @@ const response = await fetch('http://localhost:8000/api/guestbook/', {
   },
   body: JSON.stringify({
     party: 1,  // Party ID
+    name: "Custom Display Name",  // Optional - custom display name
     message: "Happy birthday! 🎉"
   })
 });
@@ -301,6 +303,7 @@ function GuestBook({ partyId }) {
 - `author_username`: Username of the author (read-only)
 - `author_first_name`: First name of the author (read-only)
 - `author_last_name`: Last name of the author (read-only)
+- `name`: Custom display name for the guest book entry (optional)
 - `message`: The actual message text
 - `created_at`: When the message was created (read-only)
 - `updated_at`: When the message was last updated (read-only)

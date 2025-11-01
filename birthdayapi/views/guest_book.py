@@ -16,7 +16,7 @@ class GuestBookEntrySerializer(serializers.ModelSerializer):
         model = GuestBookEntry
         fields = [
             'id', 'party', 'party_name', 'author', 'author_username', 
-            'author_first_name', 'author_last_name', 'message', 
+            'author_first_name', 'author_last_name', 'name', 'message', 
             'created_at', 'updated_at', 'can_edit'
         ]
         read_only_fields = ['author', 'created_at', 'updated_at']
