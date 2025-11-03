@@ -102,19 +102,15 @@ class GuestBookEntryViewSet(viewsets.ModelViewSet):
     
     def destroy(self, request, *args, **kwargs):
         """
-        Override destroy to add explicit admin check for better debugging.
-        This bypasses the permission class check and handles it manually.
+        Override destroy to allow admins to delete any entry.
+        Handles permissions manually to ensure admin check works correctly.
         """
         instance = self.get_object()
         
-        # Check permissions manually
+        # Check authentication
         if not request.user or not request.user.is_authenticated:
             return Response(
-                {
-                    'detail': 'Authentication required',
-                    'user_authenticated': False,
-                    'has_user': bool(request.user)
-                },
+                {'detail': 'Authentication required'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
         
@@ -123,30 +119,16 @@ class GuestBookEntryViewSet(viewsets.ModelViewSet):
             from django.contrib.auth.models import User
             db_user = User.objects.get(pk=request.user.pk)
             is_admin = db_user.is_staff or db_user.is_superuser
-        except Exception as e:
+        except Exception:
             is_admin = getattr(request.user, 'is_staff', False) or getattr(request.user, 'is_superuser', False)
         
-        # Allow if user is admin
+        # Check if user is the author
         is_author = instance.is_author(request.user)
         
-        # Debug info
-        debug_info = {
-            'is_admin': is_admin,
-            'is_author': is_author,
-            'user_id': request.user.id if request.user else None,
-            'username': request.user.username if request.user else None,
-            'author_id': instance.author.id,
-            'is_staff': getattr(request.user, 'is_staff', None) if request.user else None,
-            'is_superuser': getattr(request.user, 'is_superuser', None) if request.user else None,
-            'user_authenticated': request.user.is_authenticated if request.user else False
-        }
-        
+        # Allow deletion if user is admin or author
         if not (is_admin or is_author):
             return Response(
-                {
-                    'detail': 'You do not have permission to perform this action.',
-                    **debug_info
-                },
+                {'detail': 'You do not have permission to perform this action.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
