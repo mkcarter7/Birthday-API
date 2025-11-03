@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status, serializers, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from ..models import GuestBookEntry
 
 
@@ -22,16 +23,18 @@ class GuestBookEntrySerializer(serializers.ModelSerializer):
         read_only_fields = ['author', 'created_at', 'updated_at']
     
     def get_can_edit(self, obj):
-        """Check if current user can edit this entry"""
+        """Check if current user can edit this entry (author or admin)"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.is_author(request.user)
+            # Admins can edit any entry, authors can edit their own
+            return obj.is_author(request.user) or request.user.is_staff or request.user.is_superuser
         return False
 
 
 class IsAuthorOrReadOnly(permissions.BasePermission):
     """
-    Custom permission to only allow authors to edit/delete their own entries.
+    Custom permission to allow authors to edit/delete their own entries,
+    or admins (staff/superusers) to edit/delete any entry.
     Everyone can read.
     """
     def has_permission(self, request, view):
@@ -48,6 +51,16 @@ class IsAuthorOrReadOnly(permissions.BasePermission):
         if request.method in ['GET', 'HEAD', 'OPTIONS']:
             return True
         
+        # Ensure user is authenticated
+        if not request.user or not request.user.is_authenticated:
+            return False
+        
+        # Admins (staff or superuser) can edit/delete any entry
+        # Check admin status explicitly
+        is_admin = getattr(request.user, 'is_staff', False) or getattr(request.user, 'is_superuser', False)
+        if is_admin:
+            return True
+        
         # Write permissions are only allowed to the author of the entry
         return obj.is_author(request.user)
 
@@ -60,13 +73,86 @@ class GuestBookEntryViewSet(viewsets.ModelViewSet):
     - GET /api/guestbook/ - List all entries (public)
     - GET /api/guestbook/{id}/ - Get single entry (public)
     - POST /api/guestbook/ - Create new entry (authenticated)
-    - PUT /api/guestbook/{id}/ - Update entire entry (author only)
-    - PATCH /api/guestbook/{id}/ - Partial update (author only)
-    - DELETE /api/guestbook/{id}/ - Delete entry (author only)
+    - PUT /api/guestbook/{id}/ - Update entire entry (author or admin)
+    - PATCH /api/guestbook/{id}/ - Partial update (author or admin)
+    - DELETE /api/guestbook/{id}/ - Delete entry (author or admin)
     - GET /api/guestbook/my_entries/ - Get current user's entries
     """
     serializer_class = GuestBookEntrySerializer
     permission_classes = [IsAuthorOrReadOnly]
+    
+    def get_permissions(self):
+        """
+        Override to skip permission check for destroy action.
+        We handle permissions manually in destroy() method.
+        """
+        if self.action == 'destroy':
+            # Return empty permissions for destroy - we handle it manually
+            return []
+        return super().get_permissions()
+    
+    def check_object_permissions(self, request, obj):
+        """
+        Override to skip object permission check for destroy action.
+        """
+        if self.action == 'destroy':
+            # Skip - we handle in destroy() method
+            return
+        return super().check_object_permissions(request, obj)
+    
+    def destroy(self, request, *args, **kwargs):
+        """
+        Override destroy to add explicit admin check for better debugging.
+        This bypasses the permission class check and handles it manually.
+        """
+        instance = self.get_object()
+        
+        # Check permissions manually
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {
+                    'detail': 'Authentication required',
+                    'user_authenticated': False,
+                    'has_user': bool(request.user)
+                },
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Get admin status - refresh from database to ensure we have latest
+        try:
+            from django.contrib.auth.models import User
+            db_user = User.objects.get(pk=request.user.pk)
+            is_admin = db_user.is_staff or db_user.is_superuser
+        except Exception as e:
+            is_admin = getattr(request.user, 'is_staff', False) or getattr(request.user, 'is_superuser', False)
+        
+        # Allow if user is admin
+        is_author = instance.is_author(request.user)
+        
+        # Debug info
+        debug_info = {
+            'is_admin': is_admin,
+            'is_author': is_author,
+            'user_id': request.user.id if request.user else None,
+            'username': request.user.username if request.user else None,
+            'author_id': instance.author.id,
+            'is_staff': getattr(request.user, 'is_staff', None) if request.user else None,
+            'is_superuser': getattr(request.user, 'is_superuser', None) if request.user else None,
+            'user_authenticated': request.user.is_authenticated if request.user else False
+        }
+        
+        if not (is_admin or is_author):
+            return Response(
+                {
+                    'detail': 'You do not have permission to perform this action.',
+                    **debug_info
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Perform the deletion
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
     
     def get_queryset(self):
         """Get guest book entries with optional filtering"""
