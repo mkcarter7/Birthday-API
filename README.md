@@ -50,6 +50,8 @@ Or using pipenv:
 ```bash
 pipenv install
 ```
+DJANGO instalation-
+https://github.com/nashville-software-school/server-side-python-curriculum/blob/347b8218a8d8fd00b98688467603c2aa93e24257/book-3-levelup/chapters/DRF_INSTALLS.md
 
 ### 3. Set Up Environment Variables
 
